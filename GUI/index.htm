@@ -1,0 +1,97 @@
+<!DOCTYPE HTML>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>Digital Catheter Output Chart</title>
+
+        <script type="text/javascript" src="js/jquery-1.9.1.min.js"></script>
+        <script type="text/javascript" src="js/highcharts.js"></script>
+        <script type="text/javascript" src="js/modules/data.js"></script>
+
+		<style type="text/css">
+${demo.css}
+		</style>
+		<script type="text/javascript">
+$(document).ready(function () {
+    var prevlen = 0;
+    var maxpoints = 10;
+    var options = {
+        chart: {
+            type: 'line',
+            animation: Highcharts.svg, // don't animate in old IE
+            marginRight: 10,
+                
+            events: {
+                load: function () {
+                    var series = this.series[0];
+                    setInterval(function() {
+                        $.getJSON('data.json', function(data) {
+                            if(data.results.length > prevlen) {
+                                var temp = data.results[data.results.length - 1],
+                                    x = temp[0],
+                                    y = temp[1];
+
+                                if(series.data.length >= maxpoints) series.addPoint([x, y], true, true);
+                                else series.addPoint([x, y], true, false);
+                                prevlen = data.results.length;
+                            }
+                        });
+                    }, 1000);
+                }
+            }
+        },
+        title: {
+            text: 'Digital Catheter'
+        },
+        xAxis: {
+            type: 'datetime',
+            tickPixelInterval: 150
+        },
+        yAxis: {
+            title: {
+                text: 'Urine Output (mL)'
+            },
+            plotLines: [{
+                value: 0,
+                width: 1,
+                color: '#808080'
+            }]
+        },
+        tooltip: {
+            formatter: function () {
+                return '<b>' + this.series.name + '</b><br/>' +
+                    Highcharts.dateFormat('%Y-%m-%d %H:%M:%S', this.x) + '<br/>' +
+                    Highcharts.numberFormat(this.y, 2);
+            }
+        },
+        legend: {
+            enabled: false
+        },
+        exporting: {
+            enabled: true
+        },
+        series: [{
+            name: 'Urine Output'
+        }]
+    };
+
+    $.getJSON('data.json', function(data) {
+        var length = data.results.length;
+        if(length > maxpoints) {
+            options.series[0].data = data.results.slice(length-maxpoints-1,length-1);
+            console.log(options.series[0].data);
+        }
+        else options.series[0].data = data.results;
+        $('#container').highcharts(options);
+    });
+});
+
+		</script>
+	</head>
+	<body>
+<script src="js/modules/exporting.js"></script>
+
+<div id="container" style="min-width: 310px; height: 400px; margin: 0 auto"></div>
+
+	</body>
+</html>
