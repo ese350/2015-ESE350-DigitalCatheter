@@ -1,16 +1,15 @@
 #include "mbed.h"
 #include "MRF24J40.h"
- 
 #include <string>
  
 // RF tranceiver to link with handheld.
-MRF24J40 mrf(p11, p12, p13, p14, p21);
+ MRF24J40 mrf(p11, p12, p13, p14, p21);
  
 // LEDs you can treat these as variables (led2 = 1 will turn led2 on!)
-DigitalOut led1(LED1);
-DigitalOut led2(LED2);
-DigitalOut led3(LED3);
-DigitalOut led4(LED4);
+DigitalOut led1(LED1); //Indicates top valve is open (ON) or closed (OFF)
+DigitalOut led2(LED2); //Indicates top valve is powered (ON) or idle (OFF)
+DigitalOut led3(LED3); //Indicates bottom valve is open (ON) or closed (OFF)
+DigitalOut led4(LED4); //Indicates bottom valve is powered (ON) or idle (OFF)
  
 // Input Shock
 DigitalIn shock(p18);
@@ -34,9 +33,6 @@ DigitalIn B_closed(p17);
 // Timer
 Timer timer;
  
-// Serial port for showing RX data.
-Serial pc(USBTX, USBRX);
- 
 // Used for sending and receiving
 char txBuffer[128];
 char rxBuffer[128];
@@ -51,8 +47,7 @@ int rxLen;
 * @param data A pointer to a char array to hold the data
 * @param maxLength The max amount of data to read.
 */
-int rf_receive(char *data, uint8_t maxLength)
-{
+int rf_receive(char *data, uint8_t maxLength) {
     uint8_t len = mrf.Receive((uint8_t *)data, maxLength);
     uint8_t header[8]= {1, 8, 0, 0xA1, 0xB2, 0xC3, 0xD4, 0x00};
  
@@ -80,8 +75,7 @@ int rf_receive(char *data, uint8_t maxLength)
 * @param maxLength The length of the data to send.
 *                  If you are sending a null-terminated string you can pass strlen(data)+1
 */
-void rf_send(char *data, uint8_t len)
-{
+void rf_send(char *data, uint8_t len) {
     //We need to prepend the message with a valid ZigBee header
     uint8_t header[8]= {1, 8, 0, 0xA1, 0xB2, 0xC3, 0xD4, 0x00};
     uint8_t *send_buf = (uint8_t *) malloc( sizeof(uint8_t) * (len+8) );
@@ -98,253 +92,115 @@ void rf_send(char *data, uint8_t len)
  
  
 //***************** You can start coding here *****************//
-int main (void)
-{
+void sendMessage() {
+    rf_send(txBuffer, strlen(txBuffer) + 1);
+}
+
+void openTop() {
+    //indicates top is powered 
+    led2 = 1;
+
+    INA1 = 1;
+    INA2 = 0;
+    ENA = 1;
     
-    uint8_t channel = 6;
-    //Set the Channel. 0 is default, 15 is max
-    mrf.SetChannel(channel);
-    
-    pc.printf("Starting");
-    
-    // Set it to default position - open the top valve
+    while(!A_open) sendMessage();
+    ENA = 0;
+
+    //indicates top is idle and open
+    led1 = 1;
+    led2 = 0;
+}
+
+void closeTop() {
+    //indicates top is powered
+    led2 = 1;
+
     INA1 = 0;
     INA2 = 1;
     ENA = 1;
-    
-    while(!A_open){
-        wait(0.5);    
-    }; // PIN 19
-    
+
+    while(!A_closed) sendMessage();
     ENA = 0;
-    
-    // Set it to default position - close the bottom valve
+
+    //indicates top is idle and closed
+    led1 = 0;
+    led2 = 0;
+}
+
+void openBottom() {
+    //indicates bottom is powered
+    led4 = 1;
+
+    INB1 = 1;
+    INB2 = 0;
+    ENB = 1;
+
+    while(!B_open) sendMessage();
+    ENB = 0;
+
+    //indciates bottom is idle and open
+    led3 = 1;
+    led4 = 0;
+}
+
+void closeBottom() {
+    //indicates bottom is powered
+    led4 = 1;
+
     INB1 = 0;
     INB2 = 1;
     ENB = 1;
     
-    while(!B_closed){
-        wait(0.5);  
-    }; // PIN 17
+    while(!B_closed) sendMessage();
     ENB = 0;
+
+    //indicates bottom is idle and closed
+    led3 = 0;
+    led4 = 0;
+}
+
+void toggleMessage() {
+    if(strcmp(txBuffer,"0")) strcpy(txBuffer, "1");
+    else strcpy(txBuffer, "0");
+}
+
+int main (void) {
+    //set the radio channel. 0 is default, 15 is max.
+    uint8_t channel = 6;
+    mrf.SetChannel(channel);
+    //set the default message to the computer reciever
+    strcpy(txBuffer, "0");
     
-    // Turn on all LEDs.
-    led1 = 1;
-    led2 = 1;
-    led3 = 1;
-    led4 = 1;
-    
-    wait(0.5);    
-    
-    while(true){
+    while(true) {
+        // set valves to collection position
+        closeBottom();
+        openTop();
         
+        led1 = 1;
+        led2 = 1;
+        led3 = 1;
+        led4 = 1;
+
+        while(!shock) sendMessage();
+        toggleMessage();
+
         led1 = 0;
         led2 = 0;
         led3 = 0;
-        led4 = 1;
-        
-        ENA = 0;
-        
-        wait(0.5);
-        
-        // Send the null message           
-        strcpy(txBuffer, "null");            
-        rf_send(txBuffer, strlen(txBuffer) + 1);
-                
-        if(shock) {       
+        led4 = 0;
 
-            /***********************/
-            // SEND THE VOLUME INFO//
-            /***********************/
-                 
-                // Turn on all LEDs.
-                led1 = 1;
-                led2 = 1;
-                led3 = 1;
-                led4 = 1;
-                
-                //Add to the buffer. You may want to check out sprintf
-                strcpy(txBuffer, "shockedddddddddddddddddddddddddddd");     
-                rf_send(txBuffer, strlen(txBuffer) + 1);
-                
-                wait(0.5);
-            
-                // Send the null message           
-                strcpy(txBuffer, "shockedddddddddddddddddddddd");            
-                rf_send(txBuffer, strlen(txBuffer) + 1); 
-                        
-            /***********************/
-            // CLOSE THE TOP VALVE //
-            /***********************/
-                
-                // Turn off all LEDs.
-                led1 = 0;
-                led2 = 0;
-                led3 = 0;
-                led4 = 0;
-                
-                // Reverse direction
-                INA1 = 1;
-                INA2 = 0;
-                ENA = 1;
-                
-                led1 = 1;
-                
-                wait(0.5);
-                
-                // Send the null message           
-                strcpy(txBuffer, "null");            
-                rf_send(txBuffer, strlen(txBuffer) + 1);  
-                
-                while(!A_closed){    
-                    wait(0.5);
-                    // Send the null message           
-                    strcpy(txBuffer, "null");            
-                    rf_send(txBuffer, strlen(txBuffer) + 1);     
-                }; // PIN 20
-                
-                ENA = 0;
-                
-                wait(0.5);
-                
-                // Send the null message           
-                strcpy(txBuffer, "0");            
-                rf_send(txBuffer, strlen(txBuffer) + 1);  
-            
-
-                
-            /*************************/
-            // OPEN THE BOTTOM VALVE //
-            /*************************/
-                
-                // Turn on all LEDs.
-                led1 = 0;
-                led2 = 1;
-                led3 = 0;
-                led4 = 0;
-                
-                // Open the bottom valve
-                INB1 = 1;
-                INB2 = 0;
-                ENB = 1;
-                
-                while(!B_open){
-                    wait(0.5);
-                    // Send the null message           
-                    strcpy(txBuffer, "0");            
-                    rf_send(txBuffer, strlen(txBuffer) + 1);      
-                }; // PIN 16
-                
-                // Turn on all LEDs.
-                led1 = 0;
-                led2 = 1;
-                led3 = 0;
-                led4 = 1;
-                
-                ENB = 0;
-                              
-                // WAIT FOR 2 SECONDS:
-                
-                wait(0.5);
-                
-                // Send the null message           
-                strcpy(txBuffer, "0");            
-                rf_send(txBuffer, strlen(txBuffer) + 1); 
-                
-                wait(0.5);
-                
-                // Send the null message           
-                strcpy(txBuffer, "0");            
-                rf_send(txBuffer, strlen(txBuffer) + 1); 
-                
-                wait(0.5);
-                
-                // Send the null message           
-                strcpy(txBuffer, "0");            
-                rf_send(txBuffer, strlen(txBuffer) + 1); 
-                
-                wait(0.5);
-                
-                // Send the null message           
-                strcpy(txBuffer, "0");            
-                rf_send(txBuffer, strlen(txBuffer) + 1); 
-                
-                wait(0.5);
-                
-                // Send the null message           
-                strcpy(txBuffer, "0");            
-                rf_send(txBuffer, strlen(txBuffer) + 1); 
-                
-                wait(0.5);
-                
-                // Send the null message           
-                strcpy(txBuffer, "0");            
-                rf_send(txBuffer, strlen(txBuffer) + 1); 
-                
-                wait(0.5);
-                
-                // Send the null message           
-                strcpy(txBuffer, "0");            
-                rf_send(txBuffer, strlen(txBuffer) + 1); 
-                
-                wait(0.5);
-                
-                // Send the null message           
-                strcpy(txBuffer, "0");            
-                rf_send(txBuffer, strlen(txBuffer) + 1); 
-                
-                
-            /*************************/
-            // CLOSE THE BOTTOM VALVE //
-            /*************************/ 
-            
-                INB1 = 0;
-                INB2 = 1;
-                ENB = 1;
-                
-                while(!B_closed){
-                    wait(0.5);
-                    // Send the null message           
-                    strcpy(txBuffer, "0");            
-                    rf_send(txBuffer, strlen(txBuffer) + 1);  
-                }; // PIN 17
-                ENB = 0;
-                
-                // Turn on all LEDs.
-                led1 = 1;
-                led2 = 1;
-                led3 = 1;
-                led4 = 1;
-                
-                wait(0.5);
-                
-                // Send the null message           
-                strcpy(txBuffer, "0");            
-                rf_send(txBuffer, strlen(txBuffer) + 1); 
-                
-                
-            /***********************/
-            // OPEN THE TOP VALVE //
-            /***********************/
-            
-                INA1 = 0;
-                INA2 = 1;
-                ENA = 1;
-                
-                while(!A_open){
-                    wait(0.5);
-                    // Send the null message           
-                    strcpy(txBuffer, "0");            
-                    rf_send(txBuffer, strlen(txBuffer) + 1);      
-                }; // PIN 19
-                
-                ENA = 0;
-                
-                wait(0.5); 
-                
-                // Send the null message           
-                strcpy(txBuffer, "0");            
-                rf_send(txBuffer, strlen(txBuffer) + 1);    
+        // sets valves to drainage position
+        closeTop();
+        openBottom();
+  
+        //stall until the valve empties
+        timer.reset();
+        timer.start();
+        //consider using timeout
+        while(timer.read() < 2) {
+            sendMessage();
         }
+        timer.stop();
     }
 }

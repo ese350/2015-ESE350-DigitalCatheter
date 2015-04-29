@@ -43,12 +43,21 @@ flow = 0
 
 def read_from_port(ser):
 	global serialThreadStatus, flow, counter
+
+	#sets default value of prev_signal
+	prev_signal = "";
 	while serialThreadStatus:
 		with lock:
+			ser.flushInput()
 			signal = ser.readline()
-			if len(signal) > 0: #pick a better signal then this
+			if (len(signal) > 0) && (signal != prev_signal):
 				print "mbed: " + signal
-				counter += 5
+
+				#only switching the signal corresponds to a shock
+				#the first signal thus does not need to be registered as a shock
+				if prev_signal != "":
+					counter += 5
+				prev_signal = signal
 			ser.write(str(flow) + '\n')
 thread = threading.Thread(target = read_from_port, args = (ser,))
 thread.start()
