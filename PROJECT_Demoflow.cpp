@@ -13,14 +13,19 @@ DigitalOut led4(LED4);
 
 // Timer
 Timer timer;
- 
-// Serial port for showing RX data.
-Serial pc(USBTX, USBRX);
- 
+
 // Used for sending and receiving
 char txBuffer[128];
 char rxBuffer[128];
 int rxLen;
+
+//Used for controlling solenoid
+PwmOut pwm(p26);
+char ch0[128];
+char ch1[128];
+char ch2[128];
+
+Serial pc(USBTX, USBRX);
 
 //***************** Do not change these methods (please) *****************//
  
@@ -80,23 +85,40 @@ int main (void) {
     uint8_t channel = 1;
     mrf.SetChannel(channel);
 
+    //pwm settings
+    float prev_width = 0.0f;
+    float width = 0.0f;
+    pwm.period(1.0f);
+    pwm.pulsewidth(0.0f);
+
+    int pch0;
+    int pch1;
+    int pch2;
+
     while(true) {
         strcpy(rxBuffer, "");
-        strcpy(txBuffer, "");
         
-        //Try to receive some data from the radio  
+        //Try to receive some data from the radio    
         rxLen = 0;
         rxLen = rf_receive(rxBuffer, 128);
 
-        //Relay the message to serial
-        strcat(rxBuffer,"\n");
-        pc.printf(rxBuffer);
+        strncpy(ch0, rxBuffer + 0, 1);
+        strncpy(ch1, rxBuffer + 1, 1);
+        strncpy(ch2, rxBuffer + 2, 1);
 
-        //Try to recieve some data from the serial
-        while(!pc.readable());
-        pc.gets(txBuffer, 4);
+        pch0 = strcspn("0123456789", ch0);
+        pch1 = strcspn("0123456789", ch1);
+        pch2 = strcspn("0123456789", ch2);
 
-        //Relays the message to radio
-        rf_send(txBuffer, strlen(txBuffer) + 1);
+        //check if signal is a number
+        if(pch0 != 10 && pch1 != 10 && pch2 != 10) {
+            width = pch0 + (pch1 / 10.0f) + (pch2 / 100.0f);
+
+            //only modify the pwm when the signal changes
+            if(width != prev_width) {
+                pwm.pulsewidth(width);
+                prev_width = width;   
+            }
+        }
     }
 }

@@ -3,7 +3,7 @@
 #include <string>
  
 // RF tranceiver to link with handheld.
- MRF24J40 mrf(p11, p12, p13, p14, p21);
+MRF24J40 mrf(p11, p12, p13, p14, p21);
  
 // LEDs you can treat these as variables (led2 = 1 will turn led2 on!)
 DigitalOut led1(LED1); //Indicates top valve is open (ON) or closed (OFF)
@@ -161,16 +161,16 @@ void closeBottom() {
 }
 
 void toggleMessage() {
-    if(strcmp(txBuffer,"0")) strcpy(txBuffer, "1");
-    else strcpy(txBuffer, "0");
+    if(!strcmp(txBuffer,"A")) strcpy(txBuffer, "B");
+    else strcpy(txBuffer, "A");
 }
 
 int main (void) {
     //set the radio channel. 0 is default, 15 is max.
-    uint8_t channel = 6;
+    uint8_t channel = 1;
     mrf.SetChannel(channel);
     //set the default message to the computer reciever
-    strcpy(txBuffer, "0");
+    strcpy(txBuffer, "A");
     
     while(true) {
         // set valves to collection position
