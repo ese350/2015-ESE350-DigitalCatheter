@@ -98,7 +98,7 @@ void sendMessage() {
 
 bool valve(Valve_Comm vc) {
     bool ERROR_FLAG = false;
-    int ERROR_THRESH = 2000;
+    int ERROR_THRESH = 2200;
     mbed::DigitalIn* STATUSPTR;
 
     led1 = led2 = led3 = led4 = 0;
@@ -146,7 +146,7 @@ bool valve(Valve_Comm vc) {
     }
 
     while(!(*STATUSPTR) && !ERROR_FLAG) {
-        ERROR_FLAG = (timer.read_ms() < ERROR_THRESH);
+        ERROR_FLAG = (timer.read_ms() > ERROR_THRESH);
         sendMessage();    
     }
 
