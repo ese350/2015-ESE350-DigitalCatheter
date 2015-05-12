@@ -60,9 +60,9 @@ def read_from_port(ser):
 				prev_signal = signal
 			#processes signal when value switches
 			if (signal=='B' and prev_signal=='A') or (signal=='A' and prev_signal=='B'):
-				counter += 5
+				counter += 3
 				prev_signal = signal
-			ser.write(str(flow).zfill(3) + '\n')
+			ser.write(str(flow / 2).zfill(3) + '\n')
 thread = threading.Thread(target = read_from_port, args = (ser,))
 thread.start()
 
@@ -93,7 +93,7 @@ class App(threading.Thread):
 	def flow(self, val):
 		with lock:
 			global flow
-			flow = val
+			flow = int(val)
 	def run(self):
 			self.root = Tk()
 			self.root.title('Digital Catheter')

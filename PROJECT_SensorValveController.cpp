@@ -24,11 +24,11 @@ DigitalOut INB2(p29);
 DigitalOut ENB(p30);
 
 // Button Inputs from the valve
-DigitalIn A_open(p19);
-DigitalIn A_closed(p20);
+DigitalIn top_open(p19);
+DigitalIn top_closed(p20);
 
-DigitalIn B_open(p16);
-DigitalIn B_closed(p17);
+DigitalIn bottom_open(p16);
+DigitalIn bottom_closed(p17);
  
 // Timer
 Timer timer;
@@ -38,6 +38,7 @@ char txBuffer[128];
 char rxBuffer[128];
 char str[128];
 int rxLen;
+enum Valve_Comm {OPENTOP, CLOSETOP, OPENBOTTOM, CLOSEBOTTOM};
  
 //***************** Do not change these methods (please) *****************//
  
@@ -91,73 +92,79 @@ void rf_send(char *data, uint8_t len) {
 }
  
  
-//***************** You can start coding here *****************//
 void sendMessage() {
     rf_send(txBuffer, strlen(txBuffer) + 1);
 }
 
-void openTop() {
-    //indicates top is powered 
-    led2 = 1;
+bool valve(Valve_Comm vc) {
+    bool ERROR_FLAG = false;
+    int ERROR_THRESH = 2000;
+    mbed::DigitalIn* STATUSPTR;
 
-    INA1 = 1;
-    INA2 = 0;
-    ENA = 1;
-    
-    while(!A_open) sendMessage();
-    ENA = 0;
+    led1 = led2 = led3 = led4 = 0;
 
-    //indicates top is idle and open
-    led1 = 1;
-    led2 = 0;
+    timer.reset();
+    timer.start();
+
+    switch(vc) {
+        case OPENTOP:
+            led1 = 1;
+
+            INA1 = 1;
+            INA2 = 0;
+            ENA = 1;
+
+            STATUSPTR = &top_open;
+            break;
+        case CLOSETOP:
+            led2 = 1;
+
+            INA1 = 0;
+            INA2 = 1;
+            ENA = 1;
+
+            STATUSPTR = &top_closed;
+            break;
+        case OPENBOTTOM:
+            led3 = 1;
+
+            INB1 = 1;
+            INB2 = 0;
+            ENB = 1;
+
+            STATUSPTR = &bottom_open;
+            break;
+        case CLOSEBOTTOM:
+            led4 = 1;
+
+            INB1 = 0;
+            INB2 = 1;
+            ENB = 1;
+
+            STATUSPTR = &bottom_closed;
+            break;
+    }
+
+    while(!(*STATUSPTR) && !ERROR_FLAG) {
+        ERROR_FLAG = (timer.read_ms() < ERROR_THRESH);
+        sendMessage();    
+    }
+
+    ENA = ENB = 0;
+    led1 = led2 = led3 = led4 = 0;
+    timer.stop();
+
+    return ERROR_FLAG;
 }
 
-void closeTop() {
-    //indicates top is powered
-    led2 = 1;
-
-    INA1 = 0;
-    INA2 = 1;
-    ENA = 1;
-
-    while(!A_closed) sendMessage();
-    ENA = 0;
-
-    //indicates top is idle and closed
-    led1 = 0;
-    led2 = 0;
-}
-
-void openBottom() {
-    //indicates bottom is powered
-    led4 = 1;
-
-    INB1 = 1;
-    INB2 = 0;
-    ENB = 1;
-
-    while(!B_open) sendMessage();
-    ENB = 0;
-
-    //indciates bottom is idle and open
-    led3 = 1;
-    led4 = 0;
-}
-
-void closeBottom() {
-    //indicates bottom is powered
-    led4 = 1;
-
-    INB1 = 0;
-    INB2 = 1;
-    ENB = 1;
-    
-    while(!B_closed) sendMessage();
-    ENB = 0;
-
-    //indicates bottom is idle and closed
-    led3 = 0;
-    led4 = 0;
+void error_handle(bool ERROR_FLAG) {
+    while(ERROR_FLAG) {
+        //blinking indicates distress signal
+        led1 = led2 = led3 = led4 = 1;
+        wait(0.2);
+        led1 = led2 = led3 = led4 = 0;
+        wait(0.2);
+    }
 }
 
 void toggleMessage() {
@@ -174,33 +181,24 @@ int main (void) {
     
     while(true) {
         // set valves to collection position
-        closeBottom();
-        openTop();
+        error_handle(valve(CLOSEBOTTOM));
+        error_handle(valve(OPENTOP));
         
-        led1 = 1;
-        led2 = 1;
-        led3 = 1;
-        led4 = 1;
+        led1 = led2 = led3 = led4 = 1;
 
         while(!shock) sendMessage();
         toggleMessage();
 
-        led1 = 0;
-        led2 = 0;
-        led3 = 0;
-        led4 = 0;
-
+        led1 = led2 = led3 = led4 = 0;
+        
         // sets valves to drainage position
-        closeTop();
-        openBottom();
+        error_handle(valve(CLOSETOP));
+        error_handle(valve(OPENBOTTOM));
   
         //stall until the valve empties
         timer.reset();
         timer.start();
-        //consider using timeout
-        while(timer.read() < 2) {
-            sendMessage();
-        }
+        while(timer.read() < 2) sendMessage();
         timer.stop();
     }
 }
